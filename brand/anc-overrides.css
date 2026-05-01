@@ -99,6 +99,19 @@ a[href*="github.com/nocodb"] {
   display: none !important;
 }
 
+/* Mini-sidebar bottom: hide the Help (?), Notification bell, and the
+ * "+ Create New" floating button. None of these belong in the embedded
+ * ANC view — the dashboard nav owns those entry points. The bell + plus
+ * have stable selectors from NocoDB source; the help icon is caught by
+ * the JS scrubber via its tooltip text since its trigger has no class
+ * of its own. */
+.nc-mini-sidebar-plus-btn,
+.nc-mini-sidebar-btn-full-width:has(.nc-mini-sidebar-plus-btn),
+[data-testid="nc-sidebar-notification-btn"],
+.nc-mini-sidebar-btn-full-width:has([data-testid="nc-sidebar-notification-btn"]) {
+  display: none !important;
+}
+
 /* ---------- ANC brand color overrides --------------------------------- */
 /* Override NocoDB's primary blue with ANC blue (#0A52EF). NocoDB uses
  * Tailwind/Windi utility classes baked into the bundle — overrides target

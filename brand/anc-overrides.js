@@ -152,6 +152,22 @@
     }
   }
 
+  // Hide the Help (?) icon in the mini-sidebar. Its trigger has no stable
+  // class — the only reliable signal is the NcTooltip wrapper's title
+  // ("Help"). NcTooltip renders the title into the wrapper's title attr or
+  // an aria-label; check both.
+  function hideHelpIcon(root) {
+    const candidates = root.querySelectorAll(
+      '[title="Help"], [aria-label="Help"], [aria-describedby*="help" i]'
+    );
+    for (const el of candidates) {
+      if (el.dataset.ancHelpHidden) continue;
+      const wrapper = el.closest('.nc-mini-sidebar-btn-full-width') || el;
+      wrapper.style.display = 'none';
+      el.dataset.ancHelpHidden = '1';
+    }
+  }
+
   function scrub(root) {
     root = root || document.body;
     if (!root || !root.querySelectorAll) return;
@@ -200,6 +216,9 @@
     // 3. Hide premium-feature sparkle pips (Coloring button, Scripts tile,
     //    and other EE-gated UI that renders the green starburst SVG).
     hidePremiumSparkles(root);
+
+    // 3b. Hide the mini-sidebar Help (?) icon — the dashboard owns help.
+    hideHelpIcon(root);
 
     // 4. Force the document title — NocoDB sets it to "NocoDB" on every
     //    route change. Replace any "NocoDB" prefix/suffix with "ANC Operations".
