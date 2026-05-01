@@ -15,10 +15,13 @@
 # this Dockerfile at the repo root.
 
 # -------- 1. nc-gui builder ----------------------------------------------
-FROM node:18-bookworm-slim AS gui-builder
+FROM node:20-bookworm-slim AS gui-builder
 
-# Install pnpm
-RUN npm install -g pnpm@8
+# Build deps for any native modules (sharp, etc.) + pnpm 10 (lockfile is v9)
+RUN apt-get update \
+    && apt-get install -y --no-install-recommends python3 make g++ ca-certificates \
+    && rm -rf /var/lib/apt/lists/* \
+    && npm install -g pnpm@10
 
 WORKDIR /app
 
@@ -33,6 +36,9 @@ RUN pnpm install --filter nc-gui... --frozen-lockfile
 # Copy nc-gui source + nocodb-sdk source (nc-gui imports types from it)
 COPY packages/nc-gui ./packages/nc-gui
 COPY packages/nocodb-sdk ./packages/nocodb-sdk
+
+# nocodb-sdk needs to be built first because nc-gui imports its compiled types
+RUN cd packages/nocodb-sdk && pnpm build || true
 
 # Build nc-gui (Nuxt → .output/public + .output/server)
 RUN cd packages/nc-gui && pnpm build
