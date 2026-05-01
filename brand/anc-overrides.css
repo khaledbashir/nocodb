@@ -97,44 +97,22 @@ html[data-theme="dark"], .dark {
 
 /* ---------- Embed mode (iframed inside services-dashboard) ----------- */
 /* Trigger added by anc-overrides.js when ?embed=1 in URL or cross-origin
- * parent frame detected. Hides every NocoDB chrome surface so the
- * services-dashboard sidebar is the only nav and the iframe shows just the
- * data area. */
+ * parent frame detected.
+ *
+ * Earlier iteration hid NocoDB's left sidebars to chase a one-sidebar look,
+ * but the parent layout still reserved their space — leaving a large empty
+ * vertical band between the services-dashboard sidebar and the NocoDB
+ * content. Worse, when staff drilled into a base, they had no way to switch
+ * between tables/views/bases (NocoDB's left nav is the only way).
+ *
+ * The two-sidebar UX is intentional for v1 — services-dashboard sidebar for
+ * cross-app nav, NocoDB sidebar for in-workspace nav. Like VS Code's two-
+ * panel left rail. We only strip the upsell badges and the duplicate
+ * search bar; everything else stays. */
 
-/* Top toolbar — "Search across CRM" + Cmd+K shortcut + workspace plan badge */
-html.anc-embed [class*="ws-top-bar"],
-html.anc-embed [class*="WorkspaceTopBar"],
+/* Hide NocoDB's "Search across CRM" — services-dashboard already provides
+ * one in its own topbar, two search bars stacked is confusing. */
 html.anc-embed [data-testid*="search-across-crm"],
-html.anc-embed [class*="search-across"],
-html.anc-embed [class*="cmd-k"] {
-  display: none !important;
-}
-
-/* Mini-sidebar (left icon strip — bases/grid/diagram/settings/help/+/bell) */
-html.anc-embed [class*="MiniSidebar"],
-html.anc-embed [class*="mini-sidebar"],
-html.anc-embed [class*="WorkspaceSwitcher"],
-html.anc-embed [class*="workspace-switcher"],
-html.anc-embed aside.nc-mini-sidebar,
-html.anc-embed nav[role="navigation"]:first-of-type {
-  display: none !important;
-}
-
-/* Workspace sidebar (the "Workspace" header + base list) — services-dashboard
- * sidebar already lists what users need; hide NocoDB's own duplicate. */
-html.anc-embed [class*="HomeSidebar"],
-html.anc-embed [class*="home-sidebar"],
-html.anc-embed [data-testid*="home-sidebar"] {
-  display: none !important;
-}
-
-/* Don't touch main content area — was hiding too much. Browser handles
- * layout when nav siblings are display:none. Earlier attempt to override
- * margin/width broke pages where the "main" container holds error states. */
-
-/* Hide help/notification footer icons + create-base button at sidebar bottom */
-html.anc-embed [data-testid*="help-button"],
-html.anc-embed [data-testid*="notification-bell"],
-html.anc-embed [data-testid*="quick-action"] {
+html.anc-embed [class*="search-across-crm"] {
   display: none !important;
 }
