@@ -36,4 +36,11 @@ RUN find /usr/src/app/docker/nc-gui -name "*.html" -type f -exec sh -c '\
     grep -q "anc-overrides.css" "$0" || sed -i "s|</head>|<link rel=\"stylesheet\" href=\"/anc-overrides.css\"></head>|" "$0"; \
     grep -q "anc-overrides.js" "$0" || sed -i "s|</head>|<script src=\"/anc-overrides.js\" defer></script></head>|" "$0"' {} \;
 
+# Patch compiled NocoDB backend to set SameSite=None on auth/refresh cookies
+# so the iframe at services.anc.com inherits ops.ancsports.net's session.
+# NocoDB v2 builds the entire backend into /usr/src/app/docker/index.js — sed
+# the literal cookie option strings.
+RUN sed -i "s/sameSite:\"lax\"/sameSite:\"none\"/g; s/sameSite: 'lax'/sameSite: 'none'/g; s/sameSite:\\\"lax\\\"/sameSite:\\\"none\\\"/g" /usr/src/app/docker/index.js \
+ && grep -c "sameSite" /usr/src/app/docker/index.js || true
+
 EXPOSE 8080

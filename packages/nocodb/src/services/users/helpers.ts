@@ -35,10 +35,10 @@ export function setTokenCookie(res: Response, token, req?: any): void {
   // create http only cookie with refresh token that expires in 7 days
   const cookieOptions = {
     httpOnly: true,
-    sameSite: 'lax' as const,
-    secure: req?.ncSiteUrl
-      ? req.ncSiteUrl.startsWith('https')
-      : !!ncSiteUrl?.startsWith('https'),
+    sameSite: 'none' as const,
+    // Force secure=true: SameSite=None requires Secure cookies. iframe is
+    // always over https in production.
+    secure: true,
     expires: new Date(
       Date.now() + NC_REFRESH_TOKEN_EXP_IN_DAYS * 24 * 60 * 60 * 1000,
     ),
@@ -50,8 +50,8 @@ export function setTokenCookie(res: Response, token, req?: any): void {
 export function setAuthCookie(res: Response, token: string): void {
   res.cookie('nc_token', token, {
     httpOnly: true,
-    sameSite: 'lax',
-    secure: !!ncSiteUrl?.startsWith('https'),
+    sameSite: 'none' as const,
+    secure: true,
     path: '/api',
     maxAge: 10 * 60 * 60 * 1000, // 10 hours — match JWT expiry
   });
@@ -60,8 +60,8 @@ export function setAuthCookie(res: Response, token: string): void {
 export function clearAuthCookie(res: Response): void {
   res.clearCookie('nc_token', {
     httpOnly: true,
-    sameSite: 'lax',
-    secure: !!ncSiteUrl?.startsWith('https'),
+    sameSite: 'none' as const,
+    secure: true,
     path: '/api',
   });
 }
