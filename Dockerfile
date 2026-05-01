@@ -49,4 +49,19 @@ RUN sed -i -E "s/'sameSite':'lax'/'sameSite':'none'/g; s/\"sameSite\":\"lax\"/\"
  && echo "sameSite occurrences after patch:" \
  && grep -oE "[\"']?sameSite[\"']?:[^,;}]{1,40}" /usr/src/app/docker/index.js | sort -u || true
 
+# Disable NocoDB's built-in iframe-block middleware (packages/nc-gui/middleware/
+# 02.security.global.ts) which throws 403 'Not allowed' when self !== top —
+# the entire reason ops.ancsports.net renders an error page when iframed in
+# services.ancsports.net/operations. The compiled middleware lives in two
+# Nuxt chunks (file names rotate per build, so glob); both contain the literal
+# 'self!==top' check. Replacing it with 'false' makes the conditional dead
+# code so the middleware always passes through.
+#
+# We allow iframing intentionally — services-dashboard is the trusted parent.
+# Clickjacking risk is accepted because the only embedder is our own app on
+# the same admin-controlled infrastructure.
+RUN find /usr/src/app/docker/nc-gui/_nuxt -name "*.js" -type f -exec sed -i "s/self!==top/false/g" {} \; \
+ && echo "self!==top occurrences after patch (should be 0):" \
+ && grep -lE "self!==top" /usr/src/app/docker/nc-gui/_nuxt/*.js | wc -l
+
 EXPOSE 8080
