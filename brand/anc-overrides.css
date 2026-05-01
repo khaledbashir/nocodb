@@ -128,16 +128,9 @@ html.anc-embed [data-testid*="home-sidebar"] {
   display: none !important;
 }
 
-/* Make the main content area take the full width once chrome is hidden */
-html.anc-embed [class*="MainContent"],
-html.anc-embed [class*="main-content"],
-html.anc-embed main,
-html.anc-embed [class*="content-area"] {
-  margin-left: 0 !important;
-  padding-left: 0 !important;
-  width: 100% !important;
-  max-width: 100% !important;
-}
+/* Don't touch main content area — was hiding too much. Browser handles
+ * layout when nav siblings are display:none. Earlier attempt to override
+ * margin/width broke pages where the "main" container holds error states. */
 
 /* Hide help/notification footer icons + create-base button at sidebar bottom */
 html.anc-embed [data-testid*="help-button"],
