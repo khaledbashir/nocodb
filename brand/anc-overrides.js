@@ -133,6 +133,22 @@
     });
   }
 
+  // Detect iframe-embed mode: ?embed=1 OR cross-origin parent frame.
+  // Sets html.anc-embed so the embed-mode CSS rules in anc-overrides.css
+  // hide NocoDB's chrome (mini-sidebar, top bar, home sidebar, etc.).
+  function applyEmbedClass() {
+    try {
+      const isEmbed =
+        new URLSearchParams(location.search).has('embed') ||
+        (window.self !== window.top);
+      if (isEmbed) document.documentElement.classList.add('anc-embed');
+    } catch (e) {
+      // cross-origin parent throws — strongest signal we're embedded
+      document.documentElement.classList.add('anc-embed');
+    }
+  }
+  applyEmbedClass();
+
   if (document.readyState === 'loading') {
     document.addEventListener('DOMContentLoaded', init);
   } else {
