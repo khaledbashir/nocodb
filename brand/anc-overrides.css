@@ -30,6 +30,45 @@
   display: none !important;
 }
 
+/* PaymentUpgradeBadge component renders a green/blue tag everywhere a feature
+ * is gated. Source: components/payment/upgrade/Badge.vue. The component wraps
+ * children in a payment-related class. Hide all instances. */
+[class*="payment-upgrade"],
+[class*="upgrade-badge"],
+.payment-upgrade-badge,
+.nc-payment-upgrade-badge,
+.nc-upgrade-tag,
+[data-testid*="payment-upgrade"],
+[data-testid*="upgrade-tag"] {
+  display: none !important;
+}
+
+/* Hide the entire +New Workspace button — single-workspace ANC ops doesn't
+ * need multi-workspace creation, and that button hosts the +Enterprise pill. */
+[data-testid="nc-create-workspace-btn"],
+[data-testid="nc-new-workspace-btn"],
+.nc-new-workspace-btn,
+.nc-create-workspace-btn {
+  display: none !important;
+}
+
+/* Last-resort: any green/blue rounded tag inside the workspaces sidebar that
+ * sits next to a "New Workspace" button is the +Enterprise pill. Target the
+ * common ant-design tag class inside the workspaces section. */
+.nc-workspaces-sidebar .ant-tag,
+[class*="workspace-sidebar"] .ant-tag,
+[class*="WorkspaceList"] .ant-tag {
+  display: none !important;
+}
+
+/* "+" icons next to Teams and Audits tab labels (premium-feature indicator) */
+.nc-tab-title [class*="payment"],
+.nc-tab-title .ant-tag,
+[class*="ws-tab-title"] [class*="payment"],
+[class*="ws-tab-title"] .ant-tag {
+  display: none !important;
+}
+
 /* Hide "Sign up for free" button (cloud-mode artifact in bottom-right) */
 a[href*="nocodb.com/signup"],
 a[href*="nocodb.com/cloud"] {
