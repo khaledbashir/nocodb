@@ -1,38 +1,39 @@
-# ANC-branded NocoDB — overlay build for EasyPanel.
+# ANC-branded NocoDB — overlay + runtime JS patch for EasyPanel.
 #
-# Strategy: layer our ANC logos on top of the official nocodb/nocodb:latest
-# image, replacing every nocodb*.png / nocodb*.svg / favicon / PWA icon with
-# the ANC equivalent. Keeps backend identical, no monorepo rebuild needed.
+# CSS hide-by-class is fragile because the official EE-built image's
+# minified JS rotates class names per release. We use a runtime JS patcher
+# (brand/anc-overrides.js) that runs in the browser, watches DOM mutations,
+# and removes any element with 'Enterprise' / 'Free Plan' / upsell text.
 #
-# CSS overrides hide the FREE PLAN badge + Enterprise upsell pills that the
-# official EE-built image bundles (we can't strip the JS conditionals without
-# rebuilding nc-gui from source).
+# This is robust against NocoDB UI changes — works regardless of which
+# Tailwind class names get bundled.
 #
 # EasyPanel: Source = GitHub khaledbashir/nocodb branch anc-rebrand,
 #            Build  = Dockerfile (root)
 
 FROM nocodb/nocodb:latest
 
-# Stage ANC brand assets
-COPY brand/anc-logo.png /tmp/anc/logo.png
-COPY brand/anc-logo-icon.png /tmp/anc/logo-icon.png
-COPY brand/anc-favicon.ico /tmp/anc/favicon.ico
+# Stage ANC brand assets at /usr/src/app/docker/nc-gui/ so they're served
+# at the root path (the static-file root that Nuxt configured).
+COPY brand/anc-logo.png /usr/src/app/docker/nc-gui/anc-logo.png
+COPY brand/anc-logo-icon.png /usr/src/app/docker/nc-gui/anc-logo-icon.png
+COPY brand/anc-favicon.ico /usr/src/app/docker/nc-gui/favicon.ico
 COPY brand/anc-overrides.css /usr/src/app/docker/nc-gui/anc-overrides.css
+COPY brand/anc-overrides.js /usr/src/app/docker/nc-gui/anc-overrides.js
 
 # Replace every NocoDB-branded image inside the served nc-gui directory.
-# The Nuxt build emits content-hashed filenames so we use globs.
+# Hashed Nuxt asset filenames so we use globs.
 RUN set -e \
- && find /usr/src/app/docker/nc-gui -type f \( -name "nocodb*.png" -o -name "full-logo*.png" \) -exec cp /tmp/anc/logo.png {} \; \
- && find /usr/src/app/docker/nc-gui -type f -name "nocodb*.svg" -delete \
- && find /usr/src/app/docker/nc-gui -type f -name "icon.png" -exec cp /tmp/anc/logo-icon.png {} \; \
- && find /usr/src/app/docker/nc-gui -type f -name "pwa-*.png" -exec cp /tmp/anc/logo-icon.png {} \; \
- && find /usr/src/app/docker/nc-gui -type f -name "apple-touch-icon*.png" -exec cp /tmp/anc/logo-icon.png {} \; \
- && find /usr/src/app/docker/nc-gui -type f -name "favicon*.ico" -exec cp /tmp/anc/favicon.ico {} \; \
- && cp /tmp/anc/favicon.ico /usr/src/app/docker/nc-gui/favicon.ico
+ && find /usr/src/app/docker/nc-gui -type f \( -name "nocodb*.png" -o -name "full-logo*.png" \) -exec cp /usr/src/app/docker/nc-gui/anc-logo.png {} \; \
+ && find /usr/src/app/docker/nc-gui -type f -name "icon.png" -exec cp /usr/src/app/docker/nc-gui/anc-logo-icon.png {} \; \
+ && find /usr/src/app/docker/nc-gui -type f -name "pwa-*.png" -exec cp /usr/src/app/docker/nc-gui/anc-logo-icon.png {} \; \
+ && find /usr/src/app/docker/nc-gui -type f -name "apple-touch-icon*.png" -exec cp /usr/src/app/docker/nc-gui/anc-logo-icon.png {} \; \
+ && find /usr/src/app/docker/nc-gui -type f -name "favicon*.ico" -exec cp /usr/src/app/docker/nc-gui/favicon.ico {} \;
 
-# Inject our override stylesheet into every HTML page so the upsell elements
-# get display:none + the brand color overrides apply. Idempotent.
-RUN find /usr/src/app/docker/nc-gui -name "*.html" -type f \
-    -exec sh -c 'grep -q "anc-overrides.css" "$0" || sed -i "s|</head>|<link rel=\"stylesheet\" href=\"/anc-overrides.css\"></head>|" "$0"' {} \;
+# Inject our override stylesheet + JS patcher into every HTML page.
+# JS runs on DOMContentLoaded + watches MutationObserver to scrub upsells.
+RUN find /usr/src/app/docker/nc-gui -name "*.html" -type f -exec sh -c '\
+    grep -q "anc-overrides.css" "$0" || sed -i "s|</head>|<link rel=\"stylesheet\" href=\"/anc-overrides.css\"></head>|" "$0"; \
+    grep -q "anc-overrides.js" "$0" || sed -i "s|</head>|<script src=\"/anc-overrides.js\" defer></script></head>|" "$0"' {} \;
 
 EXPOSE 8080
