@@ -1,0 +1,57 @@
+/* ANC-branded overrides for NocoDB nc-gui.
+ *
+ * Hides upsell elements that the official EE-built image renders even on
+ * self-hosted instances (FREE PLAN badge, +Enterprise pills, "Create Workspace
+ * — Enterprise" button). Applies ANC dark mode + brand color. Loaded as a
+ * <link rel="stylesheet"> injected into every HTML file by the overlay
+ * Dockerfile.
+ */
+
+/* ---------- Hide upsell / paywall UI ---------------------------------- */
+
+/* Workspace topbar plan badge — "FREE PLAN" pill next to workspace title */
+[data-testid="nc-ws-home-topbar-title"] + div[class*="rounded-full"] {
+  display: none !important;
+}
+
+/* +Enterprise pill on the New Workspace button (bottom-left of workspaces list) */
+[class*="enterprise"][class*="tag"],
+[class*="Enterprise"][class*="tag"] {
+  display: none !important;
+}
+
+/* Upgrade buttons / banners scattered across settings + sidebars */
+[data-testid*="upgrade"],
+[data-testid*="upsell"],
+[class*="paymentUpgrade"],
+[class*="upgrade-banner"],
+[class*="ee-only-tag"],
+.nc-upgrade-banner {
+  display: none !important;
+}
+
+/* Hide "Sign up for free" button (cloud-mode artifact in bottom-right) */
+a[href*="nocodb.com/signup"],
+a[href*="nocodb.com/cloud"] {
+  display: none !important;
+}
+
+/* ---------- ANC brand color overrides --------------------------------- */
+/* Override NocoDB's primary blue with ANC blue (#0A52EF). NocoDB uses
+ * Tailwind/Windi utility classes baked into the bundle — overrides target
+ * the resolved CSS custom properties + a few high-traffic class names. */
+
+:root {
+  --nc-content-brand: #0A52EF !important;
+  --nc-fill-primary: #0A52EF !important;
+  --nc-border-brand: #0A52EF !important;
+  --nc-bg-brand: rgba(10, 82, 239, 0.08) !important;
+}
+
+/* ---------- Dark-mode niceties ---------------------------------------- */
+/* Match anc-services dark mode page background when dark theme is on */
+html[data-theme="dark"], .dark {
+  --nc-bg-page: #0b1220;
+  --nc-bg-surface: #111827;
+  --nc-bg-sidebar: #07101f;
+}
