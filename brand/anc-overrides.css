@@ -99,6 +99,21 @@ a[href*="github.com/nocodb"] {
   display: none !important;
 }
 
+/* Paywall menu entries that NocoDB marks with the sparkle pip — but we
+ * also know by stable test-id, so hide them outright. Covers the
+ * "+ Create New" mini-sidebar dropdown AND the per-table view-create
+ * dropdown. The view-create menu uses `mini-sidebar-view-create-<type>`
+ * test-ids whether it's actually inside the mini-sidebar or attached to
+ * a table's view-list "+" button. */
+[data-testid="mini-sidebar-view-create-timeline"],
+[data-testid="mini-sidebar-view-create-ai"],
+[data-testid="mini-sidebar--script-create"],
+[data-testid="mini-sidebar--workflow-create"],
+[data-testid="mini-sidebar--dashboard-create"],
+[data-testid="mini-sidebar--document-create"] {
+  display: none !important;
+}
+
 /* Mini-sidebar bottom: hide the Help (?), Notification bell, and the
  * "+ Create New" floating button. None of these belong in the embedded
  * ANC view — the dashboard nav owns those entry points. The bell + plus

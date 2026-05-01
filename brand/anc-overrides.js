@@ -134,16 +134,58 @@
   // because it's hand-crafted geometry, not minifier output.
   const SPARKLE_PATH_PREFIX = 'M8 0 C8.6 5 11 7.4 16 8';
 
+  // Container types we'll walk up to when killing a paywalled feature —
+  // hide the WHOLE button / menu item / tile / panel, not just the badge.
+  // Order matters: we stop at the first match, so list narrowest first.
+  const PAYWALL_KILL_CONTAINERS = [
+    '.ant-dropdown-menu-item',
+    '[role="menuitem"]',
+    '.nc-menu-item',
+    '.nc-create-new-tile',
+    '[data-testid^="mini-sidebar-view-create-"]',
+    '[data-testid^="mini-sidebar--"]',
+    '.nc-toolbar-btn',
+    '.ant-tabs-tab',
+    'button',
+    'li',
+  ];
+
+  function findPaywallContainer(el) {
+    let cur = el;
+    while (cur && cur !== document.body) {
+      for (const sel of PAYWALL_KILL_CONTAINERS) {
+        if (cur.matches && cur.matches(sel)) return cur;
+      }
+      cur = cur.parentElement;
+    }
+    return el;
+  }
+
   function hidePremiumSparkles(root) {
     const svgs = root.querySelectorAll('svg');
     for (const svg of svgs) {
       if (svg.dataset.ancPremiumHidden) continue;
       const path = svg.querySelector('path');
-      if (path && (path.getAttribute('d') || '').startsWith(SPARKLE_PATH_PREFIX)) {
-        // Hide the SVG and any pure-wrapper parent (a <div> with only this
-        // SVG inside) so the layout collapses cleanly.
+      if (!(path && (path.getAttribute('d') || '').startsWith(SPARKLE_PATH_PREFIX))) continue;
+
+      svg.dataset.ancPremiumHidden = '1';
+
+      // Walk up to find the menu item / button / tile that this badge is
+      // marking as paywalled, and hide the whole thing. Falls back to
+      // hiding just the SVG + its wrapper if no recognizable container is
+      // found (e.g. the bare Coloring toolbar pip — we want to hide the
+      // pip but keep the Coloring button visible).
+      const container = findPaywallContainer(svg);
+      const isMenuItemOrTile =
+        container !== svg &&
+        (container.matches('.ant-dropdown-menu-item, [role="menuitem"], .nc-menu-item, .nc-create-new-tile, li') ||
+         (container.getAttribute && (container.getAttribute('data-testid') || '').includes('create')));
+      if (isMenuItemOrTile) {
+        container.style.display = 'none';
+      } else {
+        // Pip-only hide (e.g. on the Coloring toolbar button — the button
+        // itself stays usable, just the upsell sparkle is gone).
         svg.style.display = 'none';
-        svg.dataset.ancPremiumHidden = '1';
         const parent = svg.parentElement;
         if (parent && parent.children.length === 1 && parent.tagName === 'DIV') {
           parent.style.display = 'none';
