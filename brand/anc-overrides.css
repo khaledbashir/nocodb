@@ -71,7 +71,31 @@
 
 /* Hide "Sign up for free" button (cloud-mode artifact in bottom-right) */
 a[href*="nocodb.com/signup"],
-a[href*="nocodb.com/cloud"] {
+a[href*="nocodb.com/cloud"],
+a[href*="nocodb.com"],
+a[href*="github.com/nocodb"] {
+  display: none !important;
+}
+
+/* Hide the green-pip "premium feature" sparkle SVG inside any toolbar /
+ * sidebar button. The JS scrubber catches it with high precision (matches
+ * the exact SVG path), but this is a CSS-only safety net for the case
+ * where the JS hasn't scrubbed yet (first paint flash). The selector
+ * targets the small (h-3.5 / w-3.5) icons that NocoDB only uses for these
+ * adornments — main toolbar icons are h-4 w-4. */
+.nc-coloring-menu-btn svg.h-3\.5,
+.nc-toolbar-btn svg.h-3\.5.w-3\.5,
+.nc-button svg.h-3\.5.w-3\.5[stroke="transparent"] {
+  display: none !important;
+}
+
+/* Belt-and-suspenders: hide the EE-only "Scripts" workflow tile. The JS
+ * scrubber kills it by text, but until the script loads the tile flashes.
+ * NocoDB names the tile by feature id; both selectors are in the wild. */
+[data-testid*="scripts-tile"],
+[data-testid*="script-feature"],
+[class*="scripts-tile"],
+[class*="ScriptsTile"] {
   display: none !important;
 }
 

@@ -2,10 +2,13 @@
  *
  * NocoDB OSS minified JS contains conditional renders for EE-gated UI.
  * This script:
- *   1. Removes any element/tab/setting-row whose text contains
- *      "Enterprise", "Free Plan", "Teams" (tab), "Audits" (tab), upgrade prompts.
- *   2. Removes any element next to a "+" upgrade-indicator SVG.
- *   3. Replaces NocoDB <img> logos with the ANC logo at runtime.
+ *   1. Removes any element/tab/setting-row whose text matches a paywall /
+ *      vendor-brand kill list (Enterprise, Free Plan, NocoDB, etc.).
+ *   2. Closes any modal/popover whose visible text contains "Enterprise
+ *      Feature" / "Enter your license" / similar paywall prompts.
+ *   3. Hides the green-pip "premium feature" sparkle SVG that NocoDB
+ *      stamps onto toolbar buttons (Coloring, Scripts, etc.).
+ *   4. Replaces NocoDB <img> logos with the ANC logo at runtime.
  *
  * Loaded via <script defer> injected into every nc-gui index.html.
  * Idempotent — safe to call repeatedly via MutationObserver.
@@ -32,6 +35,28 @@
     /enterprise\s+only/i,
     /upgrade\s+to\s+enterprise/i,
     /this\s+feature\s+is\s+only\s+available/i,
+    // Vendor-name strip — any element whose entire own-text is "NocoDB" or
+    // "by NocoDB" or "Scripts by NocoDB". Also kills the workflow tile
+    // headlines that read "Scripts by NocoDB" / "Ready to use scripts by
+    // NocoDB". Kept short-anchored so we don't wipe data containing the
+    // string mid-sentence.
+    /^\s*nocodb\s*$/i,
+    /^\s*by\s+nocodb\s*$/i,
+    /^\s*scripts\s+by\s+nocodb\s*$/i,
+    /ready\s+to\s+use\s+scripts\s+by\s+nocodb/i,
+    /^\s*enterprise\s+feature\s*$/i,
+    /^\s*enter\s+license\s*$/i,
+    /^\s*enter\s+your\s+license\s+key.*/i,
+  ];
+
+  // Substring-match kill list — fires when the element's own-text CONTAINS
+  // the phrase (not just equals). Used for paywall body copy that varies.
+  const KILL_SUBSTRINGS = [
+    /enterprise\s+license/i,
+    /enter\s+your\s+license\s+key/i,
+    /unlock\s+this\s+feature/i,
+    /available\s+with\s+an\s+enterprise/i,
+    /scripts\s+by\s+nocodb/i,
   ];
 
   const ANC_LOGO_URL = '/anc-logo.png';
@@ -71,8 +96,60 @@
 
   function shouldKill(el) {
     const t = ownText(el);
-    if (!t || t.length > 60) return false;
-    return KILL_TEXTS.some((rx) => rx.test(t));
+    if (!t || t.length > 80) return false;
+    if (KILL_TEXTS.some((rx) => rx.test(t))) return true;
+    // For substring matches we look at the element's full innerText too,
+    // so bodies of multi-word paywall copy ("Scripts is available with an
+    // Enterprise license") get caught even when split across child spans.
+    const full = (el.innerText || '').trim();
+    if (full && full.length < 200 && KILL_SUBSTRINGS.some((rx) => rx.test(full))) return true;
+    return false;
+  }
+
+  // Find the closest modal/dialog/popover ancestor — used to nuke the whole
+  // popup when any of its inner text matches a paywall string.
+  const MODAL_SELECTORS = [
+    '.ant-modal',
+    '.ant-modal-root',
+    '.ant-modal-wrap',
+    '.ant-popover',
+    '.ant-drawer',
+    '[role="dialog"]',
+    '.nc-modal',
+  ];
+  function findModal(el) {
+    let cur = el;
+    while (cur && cur !== document.body) {
+      for (const sel of MODAL_SELECTORS) {
+        if (cur.matches && cur.matches(sel)) return cur;
+      }
+      cur = cur.parentElement;
+    }
+    return null;
+  }
+
+  // The "premium feature" sparkle is rendered as an inline SVG with this
+  // exact 4-point starburst path (NocoDB stamps it onto Coloring, Scripts,
+  // and other EE-gated toolbar buttons). The path is stable across builds
+  // because it's hand-crafted geometry, not minifier output.
+  const SPARKLE_PATH_PREFIX = 'M8 0 C8.6 5 11 7.4 16 8';
+
+  function hidePremiumSparkles(root) {
+    const svgs = root.querySelectorAll('svg');
+    for (const svg of svgs) {
+      if (svg.dataset.ancPremiumHidden) continue;
+      const path = svg.querySelector('path');
+      if (path && (path.getAttribute('d') || '').startsWith(SPARKLE_PATH_PREFIX)) {
+        // Hide the SVG and any pure-wrapper parent (a <div> with only this
+        // SVG inside) so the layout collapses cleanly.
+        svg.style.display = 'none';
+        svg.dataset.ancPremiumHidden = '1';
+        const parent = svg.parentElement;
+        if (parent && parent.children.length === 1 && parent.tagName === 'DIV') {
+          parent.style.display = 'none';
+        }
+      }
+    }
   }
 
   function scrub(root) {
@@ -82,12 +159,24 @@
     // 1. Text-match kill — find elements with own-text in the kill list,
     //    walk up to a sensible container, remove the container.
     const candidates = root.querySelectorAll(
-      'span, div, button, a, p, em, strong, label, li, [role="tab"], .ant-tag, .nc-tag'
+      'span, div, button, a, p, em, strong, label, li, h1, h2, h3, h4, [role="tab"], .ant-tag, .nc-tag'
     );
     const removed = new Set();
     for (const el of candidates) {
       if (!el.isConnected) continue;
       if (shouldKill(el)) {
+        // Paywall popups: nuke the whole modal, not just the line.
+        const modal = findModal(el);
+        if (modal && !removed.has(modal) && modal.isConnected) {
+          removed.add(modal);
+          modal.remove();
+          // Also kill the page-level mask backdrop that ant-design renders
+          // alongside modals — otherwise the page stays dimmed and unclickable.
+          document.querySelectorAll('.ant-modal-mask, .ant-modal-wrap').forEach((m) => {
+            if (m.isConnected) m.remove();
+          });
+          continue;
+        }
         const container = findContainer(el);
         if (!removed.has(container) && container.isConnected) {
           removed.add(container);
@@ -106,6 +195,17 @@
         img.src = ANC_LOGO_URL;
         img.dataset.ancReplaced = '1';
       }
+    }
+
+    // 3. Hide premium-feature sparkle pips (Coloring button, Scripts tile,
+    //    and other EE-gated UI that renders the green starburst SVG).
+    hidePremiumSparkles(root);
+
+    // 4. Force the document title — NocoDB sets it to "NocoDB" on every
+    //    route change. Replace any "NocoDB" prefix/suffix with "ANC Operations".
+    if (document.title && /nocodb/i.test(document.title)) {
+      document.title = document.title.replace(/nocodb/gi, 'ANC Operations').trim();
+      if (!document.title) document.title = 'ANC Operations';
     }
   }
 

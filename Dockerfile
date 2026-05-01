@@ -64,4 +64,13 @@ RUN find /usr/src/app/docker/nc-gui/_nuxt -name "*.js" -type f -exec sed -i "s/s
  && echo "self!==top occurrences after patch (should be 0):" \
  && grep -lE "self!==top" /usr/src/app/docker/nc-gui/_nuxt/*.js | wc -l
 
+# Rewrite the static page title from "NocoDB" → "ANC Operations" so the
+# browser tab + the first paint never leaks the vendor name. The runtime
+# JS scrubber also forces document.title on every route change, but the
+# static <title> is what shows during page load before the JS boots.
+RUN find /usr/src/app/docker/nc-gui -type f \( -name "*.html" -o -name "manifest.json" -o -name "manifest.webmanifest" \) -exec sed -i \
+    "s|<title>NocoDB</title>|<title>ANC Operations</title>|g; \
+     s|\"name\":[[:space:]]*\"NocoDB\"|\"name\":\"ANC Operations\"|g; \
+     s|\"short_name\":[[:space:]]*\"NocoDB\"|\"short_name\":\"ANC Operations\"|g" {} \;
+
 EXPOSE 8080
