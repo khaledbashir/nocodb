@@ -26,6 +26,9 @@
     /^\s*sign\s*up\s*for\s*free\s*$/i,
     /^\s*teams\s*$/i,           // Teams tab — EE-gated
     /^\s*audits\s*$/i,          // Audits tab — EE-gated
+    /^\s*try\s+nocodb\s+cloud\s*$/i,  // bottom-left upsell button
+    /^\s*nocodb\s+cloud\s*$/i,
+    /^\s*get\s+started\s+for\s+free\s*$/i,
     /enterprise\s+only/i,
     /upgrade\s+to\s+enterprise/i,
     /this\s+feature\s+is\s+only\s+available/i,
