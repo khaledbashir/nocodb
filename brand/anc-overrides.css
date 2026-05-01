@@ -114,6 +114,21 @@ a[href*="github.com/nocodb"] {
   display: none !important;
 }
 
+/* Base "Overview" / Workflow Actions tiles — the rendered cards on the
+ * base home page that say "Create Dashboard" / "Create Workflow" / "Sync
+ * Data" / etc. These all open the EE paywall modal on click; the JS
+ * scrubber dismisses the modal so they look like dead clicks. Hide the
+ * tiles instead. Keep the working ones: add-new-table, import-data,
+ * create-source. */
+[data-testid="proj-view-btn__add-new-dashboard"],
+[data-testid="proj-view-btn__add-new-workflow"],
+[data-testid="proj-view-btn__add-new-script"],
+[data-testid="proj-view-btn__add-new-template-script"],
+[data-testid="proj-view-btn__add-new-page"],
+[data-testid="proj-view-btn__create-sync"] {
+  display: none !important;
+}
+
 /* Mini-sidebar bottom: hide the Help (?), Notification bell, and the
  * "+ Create New" floating button. None of these belong in the embedded
  * ANC view — the dashboard nav owns those entry points. The bell + plus
