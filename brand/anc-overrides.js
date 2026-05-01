@@ -313,6 +313,248 @@
   }
   applyEmbedClass();
 
+  // ===========================================================================
+  // ANC AI ↔ NocoDB iframe bridge.
+  //
+  // The services-dashboard parent (services.ancsports.net) hosts the AI
+  // assistant + ai-ui-driver. Browser security blocks the parent from
+  // reaching into ops.ancsports.net DOM directly, so the parent posts
+  // `{ type: 'anc:ai-ui', action: <UiAction> }` to this iframe via
+  // window.postMessage. We receive, mirror the action inside the iframe DOM
+  // (with an animated cursor + ring-flash for visibility), and post back
+  // `{ type: 'anc:ai-ui-result', ok, error?, value? }`.
+  //
+  // Action shapes match the parent's UiAction union — kept in sync by hand.
+  // Trusted origin: only services.ancsports.net / services.anc.com may
+  // dispatch actions. Everything else is dropped.
+  // ===========================================================================
+
+  const TRUSTED_ORIGINS = new Set([
+    'https://services.ancsports.net',
+    'https://services.anc.com',
+    // local dev hosts — comment out for prod-only if needed
+    'http://localhost:3000',
+    'http://localhost:3001',
+  ]);
+
+  // Floating cursor + ring-flash, mirrors the parent ai-cursor styling.
+  const cursorEl = document.createElement('div');
+  cursorEl.className = 'anc-ai-cursor';
+  cursorEl.setAttribute('aria-hidden', 'true');
+  document.body.appendChild(cursorEl);
+
+  const styleEl = document.createElement('style');
+  styleEl.textContent = `
+    .anc-ai-cursor {
+      position: fixed; top: -100px; left: -100px;
+      width: 22px; height: 22px; border-radius: 50%;
+      background: rgba(10, 82, 239, 0.75);
+      border: 2px solid #fff;
+      box-shadow: 0 0 0 4px rgba(10, 82, 239, 0.2), 0 4px 14px rgba(10, 82, 239, 0.35);
+      pointer-events: none; z-index: 2147483647; opacity: 0;
+      transform: translate(-50%, -50%);
+      transition: left 320ms cubic-bezier(0.4, 0, 0.2, 1),
+                  top 320ms cubic-bezier(0.4, 0, 0.2, 1),
+                  opacity 200ms ease-out;
+    }
+    .anc-ai-cursor.click {
+      animation: anc-ai-cursor-pulse 420ms ease-out;
+    }
+    @keyframes anc-ai-cursor-pulse {
+      0%   { box-shadow: 0 0 0 4px rgba(10, 82, 239, 0.2), 0 4px 14px rgba(10, 82, 239, 0.35); }
+      50%  { box-shadow: 0 0 0 18px rgba(10, 82, 239, 0), 0 4px 14px rgba(10, 82, 239, 0.35); }
+      100% { box-shadow: 0 0 0 4px rgba(10, 82, 239, 0.2), 0 4px 14px rgba(10, 82, 239, 0.35); }
+    }
+    .anc-ai-ring-flash {
+      position: fixed; border: 2px solid #0A52EF; border-radius: 12px;
+      pointer-events: none; z-index: 2147483646;
+      animation: anc-ai-ring-pulse 1.8s ease-out forwards;
+    }
+    @keyframes anc-ai-ring-pulse {
+      0%   { box-shadow: 0 0 0 0 rgba(10, 82, 239, 0.55); opacity: 1; }
+      60%  { box-shadow: 0 0 0 14px rgba(10, 82, 239, 0); opacity: 0.85; }
+      100% { opacity: 0; transform: scale(1.04); }
+    }
+    .anc-ai-ring-label {
+      position: absolute; top: -26px; left: 50%; transform: translateX(-50%);
+      background: #0A52EF; color: #fff; font-size: 11px; font-weight: 600;
+      padding: 3px 8px; border-radius: 6px; white-space: nowrap;
+    }
+  `;
+  document.head.appendChild(styleEl);
+
+  function moveCursor(el) {
+    return new Promise((resolve) => {
+      const r = el.getBoundingClientRect();
+      const x = r.left + r.width / 2;
+      const y = r.top + r.height / 2;
+      cursorEl.style.opacity = '1';
+      cursorEl.style.left = x + 'px';
+      cursorEl.style.top = y + 'px';
+      setTimeout(resolve, 340);
+    });
+  }
+  function flashCursor() {
+    cursorEl.classList.add('click');
+    setTimeout(() => cursorEl.classList.remove('click'), 420);
+  }
+  function ringFlash(el, label) {
+    const r = el.getBoundingClientRect();
+    const ring = document.createElement('div');
+    ring.className = 'anc-ai-ring-flash';
+    ring.style.left = (r.left - 6) + 'px';
+    ring.style.top = (r.top - 6) + 'px';
+    ring.style.width = (r.width + 12) + 'px';
+    ring.style.height = (r.height + 12) + 'px';
+    if (label) {
+      const lab = document.createElement('div');
+      lab.className = 'anc-ai-ring-label';
+      lab.textContent = label;
+      ring.appendChild(lab);
+    }
+    document.body.appendChild(ring);
+    setTimeout(() => ring.remove(), 1900);
+  }
+
+  // Resolve element by CSS selector, [data-ai-target=...], visible text on
+  // a button/link/menu-item, or a NocoDB column header by title.
+  function findElement(selector) {
+    if (!selector) return null;
+    try {
+      const direct = document.querySelector(selector);
+      if (direct) return direct;
+    } catch (e) {}
+    // [data-ai-target=…] convenience
+    try {
+      const aiTarget = document.querySelector(`[data-ai-target="${CSS.escape(selector)}"]`);
+      if (aiTarget) return aiTarget;
+    } catch (e) {}
+    const lower = selector.trim().toLowerCase();
+    // Visible text on interactive elements
+    const els = document.querySelectorAll(
+      'button, a, [role="button"], [role="menuitem"], .ant-dropdown-menu-item, .nc-menu-item, label, [data-testid]'
+    );
+    for (const el of els) {
+      const t = (el.innerText || el.textContent || '').trim().toLowerCase();
+      if (t === lower) return el;
+    }
+    for (const el of els) {
+      const t = (el.innerText || el.textContent || '').trim().toLowerCase();
+      if (t && t.includes(lower)) return el;
+    }
+    return null;
+  }
+
+  // Native input setter — bypasses React/Vue's controlled-input shadowing
+  // so the framework actually sees the new value.
+  function setNativeValue(el, value) {
+    const proto = Object.getPrototypeOf(el);
+    const setter = Object.getOwnPropertyDescriptor(proto, 'value')?.set;
+    const protoSetter = Object.getOwnPropertyDescriptor(HTMLElement.prototype, 'value')?.set;
+    if (setter && setter !== protoSetter) {
+      setter.call(el, value);
+    } else if (protoSetter) {
+      protoSetter.call(el, value);
+    } else {
+      el.value = value;
+    }
+  }
+  async function typeIntoField(el, value) {
+    el.focus();
+    setNativeValue(el, '');
+    el.dispatchEvent(new Event('input', { bubbles: true }));
+    await new Promise((r) => setTimeout(r, 30));
+    setNativeValue(el, String(value));
+    el.dispatchEvent(new Event('input', { bubbles: true }));
+    el.dispatchEvent(new Event('change', { bubbles: true }));
+    el.dispatchEvent(new KeyboardEvent('keyup', { bubbles: true, key: 'Enter' }));
+  }
+
+  async function handleAction(action) {
+    if (!action || !action.type) throw new Error('missing action.type');
+    switch (action.type) {
+      case 'navigate': {
+        if (typeof action.path !== 'string') throw new Error('navigate.path required');
+        // NocoDB uses hash routing in OSS — preserve the leading "/"
+        const path = action.path.startsWith('#') ? action.path : '#' + (action.path.startsWith('/') ? action.path : '/' + action.path);
+        location.hash = path;
+        return { value: location.hash };
+      }
+      case 'click': {
+        const el = findElement(action.selector);
+        if (!el) throw new Error('click target not found: ' + action.selector);
+        el.scrollIntoView({ behavior: 'smooth', block: 'center' });
+        await new Promise((r) => setTimeout(r, 150));
+        await moveCursor(el);
+        flashCursor();
+        el.click();
+        return { value: 'clicked' };
+      }
+      case 'fill': {
+        const el = findElement(action.selector);
+        if (!el || !(el instanceof HTMLInputElement || el instanceof HTMLTextAreaElement)) {
+          throw new Error('fill target is not an input/textarea: ' + action.selector);
+        }
+        el.scrollIntoView({ behavior: 'smooth', block: 'center' });
+        await new Promise((r) => setTimeout(r, 150));
+        await moveCursor(el);
+        flashCursor();
+        await typeIntoField(el, action.value ?? '');
+        return { value: el.value };
+      }
+      case 'highlight': {
+        const el = findElement(action.selector);
+        if (!el) throw new Error('highlight target not found: ' + action.selector);
+        el.scrollIntoView({ behavior: 'smooth', block: 'center' });
+        await new Promise((r) => setTimeout(r, 200));
+        ringFlash(el, action.label);
+        return { value: 'highlighted' };
+      }
+      case 'wait': {
+        await new Promise((r) => setTimeout(r, Math.max(0, Number(action.ms) || 0)));
+        return { value: 'waited' };
+      }
+      default:
+        throw new Error('unknown action type: ' + action.type);
+    }
+  }
+
+  window.addEventListener('message', async (ev) => {
+    if (!ev.data || typeof ev.data !== 'object') return;
+    if (ev.data.type !== 'anc:ai-ui') return;
+    if (!TRUSTED_ORIGINS.has(ev.origin)) {
+      console.warn('[anc-bridge] dropped message from untrusted origin:', ev.origin);
+      return;
+    }
+    const requestId = ev.data.requestId;
+    try {
+      const result = await handleAction(ev.data.action);
+      ev.source?.postMessage({ type: 'anc:ai-ui-result', requestId, ok: true, ...result }, ev.origin);
+    } catch (err) {
+      ev.source?.postMessage({
+        type: 'anc:ai-ui-result',
+        requestId,
+        ok: false,
+        error: err instanceof Error ? err.message : String(err),
+      }, ev.origin);
+    }
+  });
+
+  // Heartbeat — lets the parent know the bridge is loaded and ready.
+  // Parent listens for 'anc:ai-ui-ready' before it sends actions, otherwise
+  // an action firing before this script boots silently dies.
+  function announce() {
+    if (window.parent && window.parent !== window) {
+      try {
+        window.parent.postMessage({ type: 'anc:ai-ui-ready', url: location.href }, '*');
+      } catch (e) {}
+    }
+  }
+  announce();
+  // Re-announce on hash changes (NocoDB SPA route changes) so the parent
+  // knows the iframe is still alive after navigation.
+  window.addEventListener('hashchange', announce);
+
   if (document.readyState === 'loading') {
     document.addEventListener('DOMContentLoaded', init);
   } else {
