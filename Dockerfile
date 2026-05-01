@@ -38,9 +38,15 @@ RUN find /usr/src/app/docker/nc-gui -name "*.html" -type f -exec sh -c '\
 
 # Patch compiled NocoDB backend to set SameSite=None on auth/refresh cookies
 # so the iframe at services.anc.com inherits ops.ancsports.net's session.
-# NocoDB v2 builds the entire backend into /usr/src/app/docker/index.js — sed
-# the literal cookie option strings.
-RUN sed -i "s/sameSite:\"lax\"/sameSite:\"none\"/g; s/sameSite: 'lax'/sameSite: 'none'/g; s/sameSite:\\\"lax\\\"/sameSite:\\\"none\\\"/g" /usr/src/app/docker/index.js \
- && grep -c "sameSite" /usr/src/app/docker/index.js || true
+# NocoDB v2 builds the entire backend into /usr/src/app/docker/index.js. The
+# upstream image is obfuscator-minified — three patterns appear in practice:
+#   1) 'sameSite':'lax'                    (literal — quoted key)
+#   2) 'sameSite':_0xabc(0x123,'xyz')      (obfuscator string-table lookup)
+#   3) sameSite:'lax' / sameSite:"lax"     (unquoted key, kept for safety)
+# All three are rewritten to 'none'. The grep at the end is a build-time
+# sanity log so we can see in the build output that the patch landed.
+RUN sed -i -E "s/'sameSite':'lax'/'sameSite':'none'/g; s/\"sameSite\":\"lax\"/\"sameSite\":\"none\"/g; s/'sameSite':_0x[a-z0-9_]+\(0x[a-f0-9]+,'[^']+'\)/'sameSite':'none'/g; s/sameSite:'lax'/sameSite:'none'/g; s/sameSite:\"lax\"/sameSite:\"none\"/g" /usr/src/app/docker/index.js \
+ && echo "sameSite occurrences after patch:" \
+ && grep -oE "[\"']?sameSite[\"']?:[^,;}]{1,40}" /usr/src/app/docker/index.js | sort -u || true
 
 EXPOSE 8080
